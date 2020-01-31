@@ -1,18 +1,11 @@
-NELDIR=	/lib/modules/$(shell uname -r)/build
-
-obj-m	:= pblk.o
-pblk-objs += pblk-l2p.o
-pblk-objs += pblk-test.o
+obj-m 		   += mypblk.o
+mypblk-objs := pblk-l2p.o pblk-test.o
 
 KDIR	:=	/lib/modules/$(shell uname -r)/build
-PWD	:=	$(shell pwd)
+PWD		:=	$(shell pwd)
 
 default:
-	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
-	rm -rf *.ko
-	rm -rf *.mod.*
-	rm -rf *.cmd
-	rm -rf *.o
-	rm -rf .tmp_versions
+	make -C $(KDIR) M=$(PWD) clean
