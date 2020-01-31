@@ -85,7 +85,8 @@ static void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
 	mempool_destroy(dir->centry_pool);
 }
 
-static int __init init_pblk_l2p(void) {
+static int __init init_pblk_l2p(void)
+{
 	struct pblk_l2p_dir *dir = NULL;
 	dir = pblk_l2p_dir_alloc(10);
 	if (IS_ERR(dir)) {
@@ -97,7 +98,8 @@ static int __init init_pblk_l2p(void) {
 	return 0;
 }
 
-static void __exit cleanup_pblk_l2p(void) {
+static void __exit cleanup_pblk_l2p(void)
+{
 	trace_printk("GOOD BYE!!!\n");
 }
 
