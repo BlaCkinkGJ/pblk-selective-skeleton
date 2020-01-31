@@ -1,0 +1,18 @@
+### execution files ###
+./a.out
+
+### kernel modules ###
+*.ko
+*.mod.*
+*.cmd
+*.o
+.tmp_versions
+*.symvers
+*.order
+
+### tagging files ###
+cscope.out
+tags
+
+# misc
+*.mk
