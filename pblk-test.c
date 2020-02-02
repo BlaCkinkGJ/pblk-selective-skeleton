@@ -1,8 +1,9 @@
 #include "pblk.h"
 
-int pblk_sha_test(void)
+int pblk_sha_test(void *_pblk, const size_t trans_map_size)
 {
-	char *trans_map = NULL;
+	struct pblk *pblk = (struct pblk *)_pblk;
+	char *trans_map = pblk->trans_map;
 	int nr_entries = 0, i = 0;
 
 	int corrupt_target = 0, original_value = 0;
@@ -11,12 +12,12 @@ int pblk_sha_test(void)
 
 	unsigned char sha_result[PBLK_SHA1_BLK_SIZE];
 
-	trans_map = kmalloc(PAGE_SIZE,GFP_KERNEL);
+	trans_map = kmalloc(trans_map_size,GFP_KERNEL);
 	if (!trans_map) {
 		return -ENOMEM;
 	}
 
-	nr_entries = PAGE_SIZE / sizeof(struct ppa_addr);
+	nr_entries = trans_map_size / sizeof(struct ppa_addr);
 	corrupt_target = nr_entries - 1;
 
 	trace_printk("[INFO] # of entries ==> %d\n", nr_entries);
@@ -30,7 +31,7 @@ int pblk_sha_test(void)
 		((struct ppa_addr *)trans_map)[i].a.blk = rnd_num;
 	}
 	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, PAGE_SIZE);
+	sha1_update(&ctx, trans_map, trans_map_size);
 	sha1_final(&ctx, sha_result);
 
 	trace_printk("[SHA1] before corrupt the table\n");
@@ -42,7 +43,7 @@ int pblk_sha_test(void)
 	((struct ppa_addr *)trans_map)[corrupt_target].a.blk = 0;
 
 	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, PAGE_SIZE);
+	sha1_update(&ctx, trans_map, trans_map_size);
 	sha1_final(&ctx, sha_result);
 
 	trace_printk("[SHA1] after corrupt the table (target->%d)\n", corrupt_target);
@@ -53,7 +54,7 @@ int pblk_sha_test(void)
 	((struct ppa_addr *)trans_map)[corrupt_target].a.blk = original_value;
 	
 	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, PAGE_SIZE);
+	sha1_update(&ctx, trans_map, trans_map_size);
 	sha1_final(&ctx, sha_result);
 
 	trace_printk("[SHA1] restore corrupt the table (target->%d)\n", corrupt_target);

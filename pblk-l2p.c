@@ -1,6 +1,6 @@
 #include "pblk.h"
 
-struct pblk_l2p_cache *pblk_l2p_cache_create(size_t cache_size)
+struct pblk_l2p_cache *pblk_l2p_cache_create(const size_t cache_size)
 {
 	struct pblk_l2p_cache *cache = NULL;
 	struct pblk_l2p_centry *centry = NULL;
@@ -64,7 +64,7 @@ void pblk_l2p_cache_free(struct pblk_l2p_cache *cache)
 	vfree(cache);
 }
 
-struct pblk_l2p_dir *pblk_l2p_dir_create(size_t map_size)
+struct pblk_l2p_dir *pblk_l2p_dir_create(const size_t map_size)
 {
 	struct pblk_l2p_dir *dir = NULL;
 	struct pblk_l2p_dentry *dentry = NULL;
@@ -109,13 +109,16 @@ static int __init init_pblk_l2p(void)
 	struct pblk_l2p_dir *dir = NULL;
 	struct pblk_l2p_cache *cache = NULL;
 
+	const size_t trans_map_size = 10*4096*PAGE_SIZE;
+	const size_t cache_size = 4096*PAGE_SIZE;
+
 	pblk = vmalloc(sizeof(struct pblk));
 
 	dir = pblk->dir;
 	cache = pblk->cache;
 
-	cache = pblk_l2p_cache_create(4096*4096);
-	dir = pblk_l2p_dir_create(4096*4096*10); /* 160MB */
+	cache = pblk_l2p_cache_create(cache_size);
+	dir = pblk_l2p_dir_create(trans_map_size); /* 160MB */
 	if (IS_ERR(dir)) {
 		printk(KERN_ERR"fail to consist the directory....\n");
 		return -1;
@@ -123,7 +126,7 @@ static int __init init_pblk_l2p(void)
 
 	pblk_l2p_dir_free(dir);
 	pblk_l2p_cache_free(cache);
-	pblk_sha_test();
+	pblk_sha_test(pblk, trans_map_size);
 
 	vfree(pblk);
 	return 0;

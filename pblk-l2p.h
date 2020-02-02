@@ -55,7 +55,7 @@ struct pblk_l2p_dir *pblk_l2p_dir_create(size_t map_size);
 void pblk_l2p_cache_free(struct pblk_l2p_cache *cache);
 void pblk_l2p_dir_free(struct pblk_l2p_dir *dir);
 
-int pblk_sha_test(void); // TEST FUNCTION
+int pblk_sha_test(void *_pblk, const size_t trans_map_size); // TEST FUNCTION
 
 #define DRIVER_AUTHOR "Gijun O <kijunking@pusan.ac.kr>"
 #define DRIVER_DESC "pblk-l2p sample driver"
