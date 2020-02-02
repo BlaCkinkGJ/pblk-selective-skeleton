@@ -1,68 +1,86 @@
-#include "pblk-l2p.h"
+#include "pblk.h"
 
-static void *pblk_alloc_centry(gfp_t gfp_mask, void *pool_data)
+struct pblk_l2p_cache *pblk_l2p_cache_create(size_t cache_size)
 {
+	struct pblk_l2p_cache *cache = NULL;
 	struct pblk_l2p_centry *centry = NULL;
-	int i = 0;
+	int nr_centries = 0, i = 0, blk_idx = 0;
 
-	centry = kmalloc(sizeof(struct pblk_l2p_centry), gfp_mask);
-	if (centry == NULL) {
-		printk(KERN_ERR"centry allocation failed\n");
-		goto fail_to_alloc_centry;
+	nr_centries = (cache_size / PBLK_CENTRY_SIZE) + 1;
+
+	cache = vmalloc(sizeof(struct pblk_l2p_cache) + \
+			sizeof(struct pblk_l2p_centry) * nr_centries);
+	if (!cache) {
+		printk(KERN_ERR"cache creation failed\n");
+		goto fail_to_create_cache;
 	}
 
-	for (i = 0; i < PBLK_NR_CENTRY_MAP; i++) {
-		centry->trans_map[i] = kmalloc(PAGE_SIZE, gfp_mask);
-		if (centry->trans_map == NULL) {
-			printk(KERN_ERR"centry->trans_map allocation failed\n");
-			goto fail_to_alloc_trans_map;
+	for (i = 0; i < nr_centries; i++) {
+		centry = &cache->centries[i];
+		memset(centry->owner_sig, 0, PBLK_SHA1_BLK_SIZE);
+		for (blk_idx = 0; blk_idx < PBLK_CENTRY_NR_BLK; blk_idx++) {
+			centry->cache_blk[blk_idx] = kmalloc(PAGE_SIZE, GFP_ATOMIC);
+			if (!centry->cache_blk[blk_idx]) {
+				printk(KERN_ERR"cache block creation failed\n");
+				goto fail_to_create_cache_blk;
+			}
 		}
 	}
 
-	trace_printk("SUCCESSFUL ALLOCATE THE CENTRY\n");
-
-	return centry;
-	
-fail_to_alloc_trans_map:
-	for (; i >= 0; i--) {
-		kfree(centry->trans_map[i]);
+	cache->free_bitmap = vmalloc(nr_centries);
+	if (!cache->free_bitmap) {
+		printk(KERN_ERR"cache bitmap creation failed\n");
+		goto fail_to_create_bitmap;
 	}
-fail_to_alloc_centry:
-	kfree(centry);
+	bitmap_zero(cache->free_bitmap, nr_centries);
 
+	cache->nr_centries = nr_centries;
+
+	trace_printk("ALLOCATE THE CACHE\n");
+	return cache;
+
+fail_to_create_bitmap:
+fail_to_create_cache_blk:
+	for (blk_idx = blk_idx - 1; blk_idx >= 0; blk_idx--) {
+		vfree(centry->cache_blk[blk_idx]);
+	}
+	vfree(cache);
+fail_to_create_cache:
 	return ERR_PTR(-ENOMEM);
 }
 
-static void pblk_free_centry(void *element, void *pool_data)
+void pblk_l2p_cache_free(struct pblk_l2p_cache *cache)
 {
 	struct pblk_l2p_centry *centry = NULL;
-	int i = 0;
+	int i = 0, blk_idx = 0;
 
-	centry = (struct pblk_l2p_centry *)element;
-
-	for (i = 0; i < PBLK_NR_CENTRY_MAP; i++) {
-		kfree(centry->trans_map[i]);
+	vfree(cache->free_bitmap);
+	for (i = 0; i < PBLK_CENTRY_NR_BLK; i++) {
+		centry = &cache->centries[i];
+		for (blk_idx = 0; blk_idx < PBLK_CENTRY_NR_BLK; blk_idx++) {
+			kfree(centry->cache_blk[blk_idx]);
+		}
 	}
-
-	kfree(centry);
-
-	trace_printk("DELETE THE CENTRY\n");
+	vfree(cache);
 }
 
-static struct pblk_l2p_dir *pblk_l2p_dir_alloc(size_t nr_dentry)
+struct pblk_l2p_dir *pblk_l2p_dir_create(size_t map_size)
 {
 	struct pblk_l2p_dir *dir = NULL;
 	struct pblk_l2p_dentry *dentry = NULL;
-	int i = 0;
+	int nr_dentries = 0, i = 0;
 
-	dir = vmalloc(sizeof(struct pblk_l2p_dir)+sizeof(struct pblk_l2p_dentry)*nr_dentry);
-	if (dir == NULL) {
-		printk(KERN_ERR"dir allocation failed\n");
+	nr_dentries = (map_size / PBLK_CENTRY_SIZE) + 1;
+
+	dir = vmalloc(sizeof(struct pblk_l2p_dir) + \
+			sizeof(struct pblk_l2p_dentry)*nr_dentries);
+	if (!dir) {
+		printk(KERN_ERR"dir creation failed\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
-	for(i = 0; i < nr_dentry; i++) {
-		dentry = &dir->dentry[i];
+	for (i = 0; i < nr_dentries; i++) {
+		dentry = &dir->dentries[i];
 		atomic64_set(&dentry->hotness, 0);
 
 		dentry->line = 0;
@@ -70,31 +88,44 @@ static struct pblk_l2p_dir *pblk_l2p_dir_alloc(size_t nr_dentry)
 
 		memset(dentry->sig, 0, PBLK_SHA1_BLK_SIZE);
 
-		dentry->ptr = NULL;
+		dentry->centry = NULL;
 	}
 
-	dir->centry_pool = mempool_create(PBLK_NR_CACHE, pblk_alloc_centry, pblk_free_centry, NULL);
-	dir->nr_dentry = nr_dentry;
+	dir->nr_dentries = nr_dentries;
 
 	trace_printk("ALLOCATE THE DIR\n");
 	return dir;
 }
 
-static void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
+void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
 {
-	mempool_destroy(dir->centry_pool);
+	vfree(dir);
 }
 
+/* MODULE MAIN */
 static int __init init_pblk_l2p(void)
 {
+	struct pblk *pblk;
 	struct pblk_l2p_dir *dir = NULL;
-	dir = pblk_l2p_dir_alloc(10);
+	struct pblk_l2p_cache *cache = NULL;
+
+	pblk = vmalloc(sizeof(struct pblk));
+
+	dir = pblk->dir;
+	cache = pblk->cache;
+
+	cache = pblk_l2p_cache_create(4096*4096);
+	dir = pblk_l2p_dir_create(4096*4096*10); /* 160MB */
 	if (IS_ERR(dir)) {
 		printk(KERN_ERR"fail to consist the directory....\n");
 		return -1;
 	}
+
 	pblk_l2p_dir_free(dir);
+	pblk_l2p_cache_free(cache);
 	pblk_sha_test();
+
+	vfree(pblk);
 	return 0;
 }
 

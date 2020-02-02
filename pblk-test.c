@@ -1,6 +1,7 @@
-#include "pblk-l2p.h"
+#include "pblk.h"
 
-int pblk_sha_test(void) {
+int pblk_sha_test(void)
+{
 	char *trans_map = NULL;
 	int nr_entries = 0, i = 0;
 

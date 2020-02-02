@@ -17,12 +17,20 @@
 
 /* PRE-DEFINED MACRO */
 #define PBLK_TEST
-#define PBLK_NR_CENTRY_MAP 1000 /* PAGE_SIZE * 1000 */
-#define PBLK_NR_CACHE 5 /* TOTAL CACHE = PBLK_NR_CACHE * PBLK_NR_CENTRY_MAP*/
+#define PBLK_CENTRY_BLK_SIZE (PAGE_SIZE)
+#define PBLK_CENTRY_NR_BLK (4)
+#define PBLK_CENTRY_SIZE (PBLK_CENTRY_NR_BLK * PBLK_CENTRY_BLK_SIZE)
 
 /* STRUCT DEFINE */
 struct pblk_l2p_centry {
-	unsigned char *trans_map[PBLK_NR_CENTRY_MAP];
+	unsigned char owner_sig[PBLK_SHA1_BLK_SIZE];
+	unsigned char *cache_blk[PBLK_CENTRY_NR_BLK];
+};
+
+struct pblk_l2p_cache {
+	int nr_centries;
+	unsigned long *free_bitmap;
+	struct pblk_l2p_centry centries[0]; // For dynamic alloc
 };
 
 struct pblk_l2p_dentry {
@@ -33,16 +41,20 @@ struct pblk_l2p_dentry {
 	struct ppa_addr ppa;
 
 	unsigned char sig[PBLK_SHA1_BLK_SIZE];
-	struct pblk_l2p_centry *ptr;
+	struct pblk_l2p_centry *centry;
 };
 
 struct pblk_l2p_dir {
-	int nr_dentry; 
-	mempool_t *centry_pool; 
-	struct pblk_l2p_dentry dentry[0]; // For dynamic allocate
+	int nr_dentries; 
+	struct pblk_l2p_dentry dentries[0]; // For dynamic alloc
 };
 
 /* DECLARE FUNCION */
+struct pblk_l2p_cache *pblk_l2p_cache_create(size_t cache_size);
+struct pblk_l2p_dir *pblk_l2p_dir_create(size_t map_size);
+void pblk_l2p_cache_free(struct pblk_l2p_cache *cache);
+void pblk_l2p_dir_free(struct pblk_l2p_dir *dir);
+
 int pblk_sha_test(void); // TEST FUNCTION
 
 #define DRIVER_AUTHOR "Gijun O <kijunking@pusan.ac.kr>"
