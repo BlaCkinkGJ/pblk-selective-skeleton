@@ -684,6 +684,7 @@ struct pblk {
 	/* L2P method */
 	struct pblk_l2p_cache *cache;
 	struct pblk_l2p_dir *dir;
+	struct pblk_l2p_sha1_ctx ctx;
 };
 
 struct pblk_line_ws {

@@ -1,67 +1,97 @@
 #include "pblk.h"
 
-int pblk_sha_test(void *_pblk, const size_t trans_map_size)
+static void pblk_construct_trans_map(unsigned char* trans_map, const size_t size)
 {
-	struct pblk *pblk = (struct pblk *)_pblk;
-	char *trans_map = pblk->trans_map;
-	int nr_entries = 0, i = 0;
+	int i = 0;
 
-	int corrupt_target = 0, original_value = 0;
-
-	struct pblk_l2p_sha1_ctx ctx;
-
-	unsigned char sha_result[PBLK_SHA1_BLK_SIZE];
-
-	trans_map = kmalloc(trans_map_size,GFP_KERNEL);
-	if (!trans_map) {
-		return -ENOMEM;
-	}
-
-	nr_entries = trans_map_size / sizeof(struct ppa_addr);
-	corrupt_target = nr_entries - 1;
-
-	trace_printk("[INFO] # of entries ==> %d\n", nr_entries);
-
-	for(i = 0; i < nr_entries; i++) {
+	for(i = 0; i < pblk_get_map_nr_entries(size); i++) {
 		u32 rnd_num;
 
 		get_random_bytes(&rnd_num, sizeof(u32));
+
 		((struct ppa_addr *)trans_map)[i].a.ch = i;
-		((struct ppa_addr *)trans_map)[i].a.lun = i+10;
+		((struct ppa_addr *)trans_map)[i].a.lun = i + 10;
 		((struct ppa_addr *)trans_map)[i].a.blk = rnd_num;
 	}
-	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, trans_map_size);
-	sha1_final(&ctx, sha_result);
+}
 
-	trace_printk("[SHA1] before corrupt the table\n");
+static void pblk_sha_test(struct pblk *pblk, const size_t trans_map_size)
+{
+	struct pblk_l2p_sha1_ctx *ctx = &pblk->ctx;
+
+	unsigned char sha_result[PBLK_SHA1_BLK_SIZE];
+	unsigned char *trans_map = pblk->trans_map;
+
+	int corrupt_target = 0, original_value = 0;
+	int i = 0;
+
+	sha1_init(ctx);
+	sha1_update(ctx, trans_map, trans_map_size);
+	sha1_final(ctx, sha_result);
+
+	trace_printk("[%s(%s):%d] before corrupt the table\n", __FILE__, __func__ , __LINE__);
 	for(i = 0; i < PBLK_SHA1_BLK_SIZE; i++) {
-		trace_printk("[SHA1] index %d ==> 0x%x\n", i, sha_result[i]);
+		trace_printk("[%s(%s):%d] index %d ==> 0x%x\n", __FILE__, __func__ , __LINE__, i, sha_result[i]);
 	}
 
+	corrupt_target = pblk_get_map_nr_entries(trans_map_size) - 1;
 	original_value = ((struct ppa_addr *)trans_map)[corrupt_target].a.blk;
 	((struct ppa_addr *)trans_map)[corrupt_target].a.blk = 0;
 
-	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, trans_map_size);
-	sha1_final(&ctx, sha_result);
+	sha1_init(ctx);
+	sha1_update(ctx, trans_map, trans_map_size);
+	sha1_final(ctx, sha_result);
 
-	trace_printk("[SHA1] after corrupt the table (target->%d)\n", corrupt_target);
+	trace_printk("[%s(%s):%d] after corrupt the table (target->%d)\n", __FILE__, __func__ , __LINE__, corrupt_target);
 	for(i = 0; i < PBLK_SHA1_BLK_SIZE; i++) {
-		trace_printk("[SHA1] index %d ==> 0x%x\n", i, sha_result[i]);
+		trace_printk("[%s(%s):%d] index %d ==> 0x%x\n", __FILE__, __func__ , __LINE__, i, sha_result[i]);
 	}
 
 	((struct ppa_addr *)trans_map)[corrupt_target].a.blk = original_value;
 	
-	sha1_init(&ctx);
-	sha1_update(&ctx, trans_map, trans_map_size);
-	sha1_final(&ctx, sha_result);
+	sha1_init(ctx);
+	sha1_update(ctx, trans_map, trans_map_size);
+	sha1_final(ctx, sha_result);
 
-	trace_printk("[SHA1] restore corrupt the table (target->%d)\n", corrupt_target);
+	trace_printk("[%s(%s):%d] restore corrupt the table (target->%d)\n", __FILE__, __func__ , __LINE__, corrupt_target);
 	for(i = 0; i < PBLK_SHA1_BLK_SIZE; i++) {
-		trace_printk("[SHA1] index %d ==> 0x%x\n", i, sha_result[i]);
+		trace_printk("[%s(%s):%d] index %d ==> 0x%x\n", __FILE__, __func__ , __LINE__, i, sha_result[i]);
+	}
+}
+
+int pblk_test(const size_t trans_map_size, const size_t cache_size)
+{
+	struct pblk *pblk;
+
+	pblk = vmalloc(sizeof(struct pblk));
+
+	pblk->cache = pblk_l2p_cache_create(cache_size);
+	if (IS_ERR(pblk->cache)) {
+		printk(KERN_ERR"[%s(%s):%d] fail to consist the cache....\n", __FILE__, __func__ , __LINE__);
+		return -ENOMEM;
 	}
 
-	kfree(trans_map);
+	pblk->dir = pblk_l2p_dir_create(trans_map_size);
+	if (IS_ERR(pblk->dir)) {
+		printk(KERN_ERR"[%s(%s):%d] fail to consist the dir....\n", __FILE__, __func__ , __LINE__);
+		return -ENOMEM;
+	}
+
+	pblk->trans_map = vmalloc(trans_map_size);
+	if (!pblk->trans_map) {
+		printk(KERN_ERR"[%s(%s):%d] fail to consist the map....\n", __FILE__, __func__ , __LINE__);
+		return -ENOMEM;
+	}
+
+	pblk_construct_trans_map(pblk->trans_map, trans_map_size);
+
+	pblk_sha_test(pblk, trans_map_size);
+
+	pblk_l2p_cache_free(pblk->cache);
+	pblk_l2p_dir_free(pblk->dir);
+
+	vfree(pblk->trans_map);
+
+	vfree(pblk);
 	return 0;
 }

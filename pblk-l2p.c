@@ -1,4 +1,9 @@
-#include "pblk.h"
+#include "pblk.h" 
+
+int pblk_get_map_nr_entries(const size_t map_size)
+{
+	return (int)(map_size / sizeof(struct ppa_addr));
+}
 
 struct pblk_l2p_cache *pblk_l2p_cache_create(const size_t cache_size)
 {
@@ -54,6 +59,7 @@ void pblk_l2p_cache_free(struct pblk_l2p_cache *cache)
 	struct pblk_l2p_centry *centry = NULL;
 	int i = 0, blk_idx = 0;
 
+	trace_printk("FREE CACHE\n");
 	vfree(cache->free_bitmap);
 	for (i = 0; i < PBLK_CENTRY_NR_BLK; i++) {
 		centry = &cache->centries[i];
@@ -99,36 +105,18 @@ struct pblk_l2p_dir *pblk_l2p_dir_create(const size_t map_size)
 
 void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
 {
+	trace_printk("FREE DIR\n");
 	vfree(dir);
 }
 
 /* MODULE MAIN */
 static int __init init_pblk_l2p(void)
 {
-	struct pblk *pblk;
-	struct pblk_l2p_dir *dir = NULL;
-	struct pblk_l2p_cache *cache = NULL;
-
 	const size_t trans_map_size = 10*4096*PAGE_SIZE;
 	const size_t cache_size = 4096*PAGE_SIZE;
 
-	pblk = vmalloc(sizeof(struct pblk));
+	pblk_test(trans_map_size, cache_size);
 
-	dir = pblk->dir;
-	cache = pblk->cache;
-
-	cache = pblk_l2p_cache_create(cache_size);
-	dir = pblk_l2p_dir_create(trans_map_size); /* 160MB */
-	if (IS_ERR(dir)) {
-		printk(KERN_ERR"fail to consist the directory....\n");
-		return -1;
-	}
-
-	pblk_l2p_dir_free(dir);
-	pblk_l2p_cache_free(cache);
-	pblk_sha_test(pblk, trans_map_size);
-
-	vfree(pblk);
 	return 0;
 }
 
