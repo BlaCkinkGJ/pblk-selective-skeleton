@@ -1,3 +1,13 @@
+/**
+ * @file	pblk-sha1.h
+ * @author	오기준
+ * @date	2019-02-07
+ * @version	0.1
+ * @brief	SHA1 수행
+ * @detail	SHA1 수행을 하는 역할을 한다.
+ * @see	https://github.com/B-Con/crypto-algorithms
+ */
+
 #ifndef PBLK_SHA1_H
 #define PBLK_SHA1_H
 
@@ -14,10 +24,12 @@ struct pblk_l2p_sha1_ctx {
 	unsigned int k[4];
 };
 
+static char *buf;
+
 #define ROTLEFT(a, b) ((a << b) | (a >> (32 - b)))
 
-static inline void sha1_transform(struct pblk_l2p_sha1_ctx *ctx,
-				  const unsigned char data[])
+static inline void pblk_l2p_sha1_transform(struct pblk_l2p_sha1_ctx *ctx,
+					   const unsigned char data[])
 {
 	unsigned int a, b, c, d, e, i, j, t, m[80];
 
@@ -76,7 +88,7 @@ static inline void sha1_transform(struct pblk_l2p_sha1_ctx *ctx,
 	ctx->state[4] += e;
 }
 
-static inline void sha1_init(struct pblk_l2p_sha1_ctx *ctx)
+static inline void pblk_l2p_sha1_init(struct pblk_l2p_sha1_ctx *ctx)
 {
 	ctx->datalen = 0;
 	ctx->bitlen = 0;
@@ -91,8 +103,8 @@ static inline void sha1_init(struct pblk_l2p_sha1_ctx *ctx)
 	ctx->k[3] = 0xca62c1d6;
 }
 
-static inline void sha1_update(struct pblk_l2p_sha1_ctx *ctx,
-			       const unsigned char data[], size_t len)
+static inline void pblk_l2p_sha1_update(struct pblk_l2p_sha1_ctx *ctx,
+					const unsigned char data[], size_t len)
 {
 	size_t i;
 
@@ -100,15 +112,15 @@ static inline void sha1_update(struct pblk_l2p_sha1_ctx *ctx,
 		ctx->data[ctx->datalen] = data[i];
 		ctx->datalen++;
 		if (ctx->datalen == 64) {
-			sha1_transform(ctx, ctx->data);
+			pblk_l2p_sha1_transform(ctx, ctx->data);
 			ctx->bitlen += 512;
 			ctx->datalen = 0;
 		}
 	}
 }
 
-static inline void sha1_final(struct pblk_l2p_sha1_ctx *ctx,
-			      unsigned char hash[])
+static inline void pblk_l2p_sha1_final(struct pblk_l2p_sha1_ctx *ctx,
+				       unsigned char hash[])
 {
 	unsigned int i;
 
@@ -123,7 +135,7 @@ static inline void sha1_final(struct pblk_l2p_sha1_ctx *ctx,
 		ctx->data[i++] = 0x80;
 		while (i < 64)
 			ctx->data[i++] = 0x00;
-		sha1_transform(ctx, ctx->data);
+		pblk_l2p_sha1_transform(ctx, ctx->data);
 		memset(ctx->data, 0, 56);
 	}
 
@@ -137,7 +149,7 @@ static inline void sha1_final(struct pblk_l2p_sha1_ctx *ctx,
 	ctx->data[58] = ctx->bitlen >> 40;
 	ctx->data[57] = ctx->bitlen >> 48;
 	ctx->data[56] = ctx->bitlen >> 56;
-	sha1_transform(ctx, ctx->data);
+	pblk_l2p_sha1_transform(ctx, ctx->data);
 
 	// Since this implementation uses little endian byte ordering and MD uses big
 	// endian, reverse all the bytes when copying the final state to the output
@@ -149,6 +161,39 @@ static inline void sha1_final(struct pblk_l2p_sha1_ctx *ctx,
 		hash[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
 		hash[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
 	}
+}
+
+static inline int pblk_l2p_sha1_cmp(const unsigned char hash1[],
+				    const unsigned char hash2[])
+{
+	int i = 0;
+	for (i = 0; i < PBLK_SHA1_BLK_SIZE; i++) {
+		if (hash1[i] != hash2[i]) {
+			return i + 1;
+		}
+	}
+	return 0;
+}
+
+static inline const char *pblk_l2p_sha1_str(const unsigned char hash[])
+{
+	int i = 0, sz = 0;
+	unsigned char *ptr = NULL;
+
+	if (buf == NULL)
+		buf = vmalloc(PAGE_SIZE);
+
+	memset(buf, 0, PAGE_SIZE);
+	for (i = 0; i < PBLK_SHA1_BLK_SIZE; i++) {
+		ptr = buf + sz;
+		sz += snprintf(ptr, PAGE_SIZE, "%x", hash[i]);
+		if (sz >= PAGE_SIZE) {
+			printk(KERN_ERR "SHA result over PAGE_SIZE: %d/%lu\n",
+			       sz, PAGE_SIZE);
+			return ERR_PTR(-EACCES);
+		}
+	}
+	return buf;
 }
 
 #endif // PBLK_SHA1_H

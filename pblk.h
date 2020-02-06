@@ -898,6 +898,14 @@ int pblk_rl_is_limit(struct pblk_rl *rl);
 int pblk_sysfs_init(struct gendisk *tdisk);
 void pblk_sysfs_exit(struct gendisk *tdisk);
 
+/*
+ * Circular dependency header
+ */
+#include "pblk-l2p.h"
+
+/*
+ * Inline function definition
+ */
 static inline void *pblk_malloc(size_t size, int type, gfp_t flags)
 {
 	if (type == PBLK_KMALLOC_META)
@@ -1400,8 +1408,5 @@ static inline void pblk_setup_uuid(struct pblk *pblk)
 	uuid_le_gen(&uuid);
 	memcpy(pblk->instance_uuid, uuid.b, 16);
 }
-
-/** Circular dependency header **/
-#include "pblk-l2p.h"
 
 #endif /* PBLK_H_ */
