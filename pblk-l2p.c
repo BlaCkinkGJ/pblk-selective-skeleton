@@ -156,8 +156,8 @@ void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
  * @param	size	매핑 테이블에서 복사하고자하는 크기(byte)를 의미한다.
  * @return	반환 값이 0이면 정상 종료, 이외는 오류로 처리된다. 각 오류 번호는 커널에서 정의된 오류 정의를 따른다.
  * @todo	SHA1 서명의 부하가 크다. 160MB의 매핑 테이블의 경우에 이 과정에만 10초 이상 걸리게 된다.
- * @exception 매핑 테이블을 size 만큼 캐시 블록들에 붙였음에도 나머지 값인 rem이 남은 경우
- * @exception 매핑 테이블의 서명과 캐시 블록의 서명이 다른 경우
+ * @exception	-EINVAL	매핑 테이블을 size 만큼 캐시 블록들에 붙였음에도 나머지 값인 rem이 남은 경우
+ * @exception	-EINVAL	매핑 테이블의 서명과 캐시 블록의 서명이 다른 경우
  * @see	pblk_l2p_sha1_init();
  * @see	pblk_l2p_sha1_update();
  * @see memcpy();
@@ -225,9 +225,8 @@ int pblk_l2p_copy_map_to_centry(const unsigned char *map,
  * @param	trans_map_size	매핑 테이블의 크기를 지칭한다.
  * @return	반환 값이 0이면 정상 종료, 이외는 오류로 처리된다. 각 오류 번호는 커널에서 정의된 오류 정의를 따른다.
  * @todo	SSD에 쓰고 line 및 paddr 값을 받는 것을 구현해야 하며, helper_cache를 좀 더 최적화해야 한다.
- * @exception	helper_cache 포인터가 유효하지 않으면 임시 캐시를 못 만든 것이므로 오류를 발생시킨다.
- * @exception	helper_cache의 엔트리 갯수와 전역 디렉터리의 엔트리 갯수가 맞지 않으면 오류로 처리한다. 동일해야 하는 이유는 매핑 테이블 전체를 1:1로 넣을 것이기 때문이다.
- * @exception	pblk_l2p_copy_map_to_centry 함수 수행 후에 반환 값으로 오류 값을 받은 경우
+ * @exception	-EINVAL	helper_cache의 엔트리 갯수와 전역 디렉터리의 엔트리 갯수가 맞지 않으면 오류로 처리한다. 동일해야 하는 이유는 매핑 테이블 전체를 1:1로 넣을 것이기 때문이다.
+ * @exception	err	pblk_l2p_copy_map_to_centry 함수 수행 후에 반환 값으로 오류 값을 받은 경우
  * @see	pblk_l2p_cache_create();
  * @see	pblk_l2p_copy_map_to_centry();
  * @see	pblk_l2p_cache_free();
@@ -346,8 +345,8 @@ static struct ppa_addr pblk_l2p_get_ppa_from_ssd(struct pblk *pblk,
  * @param	pblk	pblk 구조체
  * @param	lba	LBA 값
  * @return	PPA 값
- * @exception	lba 값으로 계산한 idx 값이 디렉터리가 가지는 엔트리의 갯수보다 큰 경우
- * @exception	lba 값으로 계산한 offset이 0보다 작거나 centry 안에 들어갈 수 있는 ppa 갯수보다 많거나 같은 경우
+ * @exception	ADDR_EMPTY	lba 값으로 계산한 idx 값이 디렉터리가 가지는 엔트리의 갯수보다 큰 경우
+ * @exception	ADDR_EMPTY	lba 값으로 계산한 offset이 0보다 작거나 centry 안에 들어갈 수 있는 ppa 갯수보다 많거나 같은 경우
  * @see	pblk_get_map_nr_entries();
  * @see	pblk_l2p_get_ppa_from_cache();
  * @see	pblk_l2p_get_ppa_from_ssd();
