@@ -2,17 +2,18 @@
 #define PBLK_L2P_H
 
 /* LINUX KERNEL HEADER */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/init.h>
-#include <linux/slab.h>
+#include <linux/kernel.h>
 #include <linux/mempool.h>
+#include <linux/module.h>
 #include <linux/random.h>
+#include <linux/slab.h>
 
 /* PBLK_H INCLUDED HEADER(TODO: REMOVE) */
 #include <linux/lightnvm.h>
 
 /* USER DEFINE HEADER */
+#include "pblk.h"
 #include "pblk-sha1.h"
 
 /* PRE-DEFINED MACRO */
@@ -45,7 +46,7 @@ struct pblk_l2p_dentry {
 };
 
 struct pblk_l2p_dir {
-	int nr_dentries; 
+	int nr_dentries;
 	struct pblk_l2p_dentry dentries[0]; // For dynamic alloc
 };
 
@@ -58,7 +59,14 @@ struct pblk_l2p_dir *pblk_l2p_dir_create(size_t map_size);
 void pblk_l2p_cache_free(struct pblk_l2p_cache *cache);
 void pblk_l2p_dir_free(struct pblk_l2p_dir *dir);
 
-int pblk_test(const size_t trans_map_size, const size_t cache_size); // TEST FUNCTION
+void pblk_l2p_construct_trans_map(unsigned char *trans_map, const size_t size);
+int pblk_l2p_copy_map_to_centry(const unsigned char *map,
+				struct pblk_l2p_centry *centry,
+				const size_t size);
+int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size);
+
+int pblk_test(const size_t trans_map_size,
+	      const size_t cache_size); // TEST FUNCTION
 
 #define DRIVER_AUTHOR "Gijun O <kijunking@pusan.ac.kr>"
 #define DRIVER_DESC "pblk-l2p sample driver"

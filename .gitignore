@@ -16,3 +16,6 @@ tags
 
 # misc
 *.mk
+
+### user defined shell file ###
+check_and_add
