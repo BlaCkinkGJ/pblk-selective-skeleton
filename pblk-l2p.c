@@ -5,6 +5,7 @@
  * @version 0.1
  * @brief	선택적 매핑 테이블의 동작을 설명한다.
  * @details	전역 디렉터리와 캐시 매핑 테이블의 생성 및 사용에 대해 정의가 되어있다.
+ * @note 반드시 모든 SHA 검증은 캐시에 매핑 테이블을 SSD에서 가져올 때랑 매핑 테이블을 SSD에 보낼 때만 수행하도록 한다. 만약 이를 지키지 않는 경우에는 심각한 성능 저하를 야기할 수 있다.
  * @see		KSC 2019, KCS 2020
  */
 
@@ -25,6 +26,7 @@ sector_t pblk_get_map_nr_entries(struct pblk *pblk, const size_t map_size)
 /**
  * @brief	캐시 매핑 테이블을 구성한다.
  * @details	캐시의 크기(byte)를 받아서 캐시 매핑 테이블의 엔트린인 centry를 구축하고, 각 centry의 캐시 블록을 만들어 주도록 한다. 이때, 캐시 블록이 여러개인 이유는 kmalloc의 경우 크기가 일반적으로 PAGE_SIZE를 넘지 않기 때문이다. 이는 논문과 혼동할 수 있는 부분으로, 논문에서 이야기하는 캐시 블록은 캐시 엔트리(centry) 하나가 가지는 캐시 블록의 전체 갯수를 의미하고 여기서 캐시 블록은 PAGE_SIZE의 단일 메모리 블록을 의미한다.
+ * @warning cache_size는 반드시 정적 할당 + 동적 할당 값을 적어야한다. 동적 할당 값이 PBLK_CENTRY_BLK_SIZE로 고정됨을 확인하여 cache_size 값을 나누거나 해서는 안된다. 이를 테면, 내가 총 64MB를 할당한다고 하면 64MB라고 적어야지 PBLK_CENTRY_BLK_SIZE가 4K라고 해서 64MB/4K를 수행해서는 안됨을 의미한다. 도저히 뭔 말인지 모르겠다면 소스 코드를 직접 눈으로 확인하길 바란다.
  * @param	cache_size	캐시의 크기(byte)
  * @return	캐시 매핑 테이블의 포인터
  */
@@ -39,7 +41,7 @@ struct pblk_l2p_cache *pblk_l2p_cache_create(const size_t cache_size)
 	cache = vmalloc(sizeof(struct pblk_l2p_cache) +
 			sizeof(struct pblk_l2p_centry) * nr_centries);
 	if (!cache) {
-		printk(KERN_ERR "cache creation failed\n");
+		PBLK_L2P_ERR_MSG("cache creation failed\n");
 		goto fail_to_create_cache;
 	}
 
@@ -51,8 +53,8 @@ struct pblk_l2p_cache *pblk_l2p_cache_create(const size_t cache_size)
 			centry->cache_blk[blk_idx] =
 				kmalloc(PBLK_CENTRY_BLK_SIZE, GFP_ATOMIC);
 			if (!centry->cache_blk[blk_idx]) {
-				printk(KERN_ERR
-				       "cache block creation failed\n");
+				PBLK_L2P_ERR_MSG(
+					"cache block creation failed\n");
 				goto fail_to_create_cache_blk;
 			}
 		}
@@ -60,7 +62,7 @@ struct pblk_l2p_cache *pblk_l2p_cache_create(const size_t cache_size)
 
 	cache->free_bitmap = vmalloc(nr_centries);
 	if (!cache->free_bitmap) {
-		printk(KERN_ERR "cache bitmap creation failed\n");
+		PBLK_L2P_ERR_MSG("cache bitmap creation failed\n");
 		goto fail_to_create_bitmap;
 	}
 	bitmap_zero(cache->free_bitmap, nr_centries);
@@ -117,7 +119,7 @@ struct pblk_l2p_dir *pblk_l2p_dir_create(const size_t map_size)
 	dir = vmalloc(sizeof(struct pblk_l2p_dir) +
 		      sizeof(struct pblk_l2p_dentry) * nr_dentries);
 	if (!dir) {
-		printk(KERN_ERR "dir creation failed\n");
+		PBLK_L2P_ERR_MSG("dir creation failed\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -155,12 +157,7 @@ void pblk_l2p_dir_free(struct pblk_l2p_dir *dir)
  * @param	centry	복사의 대상이 되는 캐시 블록을 포함하는 캐시 매핑 테이블의 엔트리 포인터를 지칭한다.
  * @param	size	매핑 테이블에서 복사하고자하는 크기(byte)를 의미한다.
  * @return	반환 값이 0이면 정상 종료, 이외는 오류로 처리된다. 각 오류 번호는 커널에서 정의된 오류 정의를 따른다.
- * @todo	SHA1 서명의 부하가 크다. 160MB의 매핑 테이블의 경우에 이 과정에만 10초 이상 걸리게 된다.
- * @exception	-EINVAL	매핑 테이블을 size 만큼 캐시 블록들에 붙였음에도 나머지 값인 rem이 남은 경우
- * @exception	-EINVAL	매핑 테이블의 서명과 캐시 블록의 서명이 다른 경우
- * @see	pblk_l2p_sha1_init();
- * @see	pblk_l2p_sha1_update();
- * @see memcpy();
+ * @todo	SHA1 서명의 부하가 크다. 160MB의 매핑 테이블의 경우에 이 과정에만 10초 이상 걸리게 된다.  @exception	-EINVAL	매핑 테이블을 size 만큼 캐시 블록들에 붙였음에도 나머지 값인 rem이 남은 경우 @exception	-EINVAL	매핑 테이블의 서명과 캐시 블록의 서명이 다른 경우 @see	pblk_l2p_sha1_init(); @see	pblk_l2p_sha1_update(); @see memcpy();
  */
 int pblk_l2p_copy_map_to_centry(const unsigned char *map,
 				struct pblk_l2p_centry *centry,
@@ -196,9 +193,8 @@ int pblk_l2p_copy_map_to_centry(const unsigned char *map,
 	}
 
 	if (rem > 0) { // remain size check
-		printk(KERN_ERR
-		       "[%s(%s):%d] unaligned map size: %lu(rem:%lu)\n",
-		       __FILE__, __func__, __LINE__, size, rem);
+		PBLK_L2P_ERR_MSG("unaligned map size: %lu(rem:%lu)\n", size,
+				 rem);
 		return -EINVAL;
 	}
 
@@ -207,11 +203,10 @@ int pblk_l2p_copy_map_to_centry(const unsigned char *map,
 
 	if (pblk_l2p_sha1_cmp(trans_map_sha,
 			      centry->owner_sig)) { // SHA1 signiture check
-		printk(KERN_ERR
-		       "[%s(%s):%d] SHA1 signature unmatched (original/cache): %s/%s\n",
-		       __FILE__, __func__, __LINE__,
-		       pblk_l2p_sha1_str(trans_map_sha),
-		       pblk_l2p_sha1_str(centry->owner_sig));
+		PBLK_L2P_ERR_MSG(
+			"SHA1 signature unmatched (original/cache): %s/%s\n",
+			pblk_l2p_sha1_str(trans_map_sha),
+			pblk_l2p_sha1_str(centry->owner_sig));
 		return -EINVAL;
 	}
 
@@ -246,25 +241,21 @@ int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size)
 
 	helper_cache = pblk_l2p_cache_create(trans_map_size);
 	if (IS_ERR(helper_cache)) {
-		printk(KERN_ERR "[%s(%s):%d] fail to consist the cache....\n",
-		       __FILE__, __func__, __LINE__);
+		PBLK_L2P_ERR_MSG("fail to consist the helper cache...\n");
 		return -ENOMEM;
 	}
 
 	if (dir->nr_dentries != helper_cache->nr_centries) {
-		printk(KERN_ERR
-		       "[%s(%s):%d] unaligned cache size(dir/cache): %lu/%lu\n",
-		       __FILE__, __func__, __LINE__, dir->nr_dentries,
-		       helper_cache->nr_centries);
+		PBLK_L2P_ERR_MSG("unaligned cache size(dir/cache): %lu/%lu\n",
+				 dir->nr_dentries, helper_cache->nr_centries);
 		return -EINVAL;
 	}
 
 	for (i = 0; i < dir->nr_dentries; i++) {
 		if (sz >= trans_map_size) {
-			printk(KERN_WARNING
-			       "[%s(%s):%d] copy size overflow warning(cur/total): %lu/%lu\n",
-			       __FILE__, __func__, __LINE__, sz,
-			       trans_map_size);
+			PBLK_L2P_WARN_MSG(
+				"copy size overflow warning(cur/total): %lu/%lu\n",
+				sz, trans_map_size);
 			break;
 		}
 		dentry = &dir->dentries[i];
@@ -272,9 +263,8 @@ int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size)
 		err = pblk_l2p_copy_map_to_centry(trans_map, dentry->centry,
 						  PBLK_CENTRY_SIZE);
 		if (err) {
-			printk(KERN_ERR
-			       "[%s(%s):%d] exception occurred(errno: %d)\n",
-			       __FILE__, __func__, __LINE__, err);
+			PBLK_L2P_ERR_MSG("exception occurred(errno: %d)\n",
+					 err);
 			return err;
 		}
 		centry = dentry->centry;
@@ -283,11 +273,14 @@ int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size)
 
 		trans_map += PBLK_CENTRY_SIZE;
 		sz += PBLK_CENTRY_SIZE;
+#ifndef PBLK_L2P_TEST
+		dentry->centry = NULL;
+#endif /* PBLK_L2P_TEST */
 	}
 
 #ifndef PBLK_L2P_TEST
 	pblk_l2p_cache_free(helper_cache);
-#endif
+#endif /* PBLK_L2P_TEST */
 	return 0;
 }
 
@@ -296,7 +289,7 @@ int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size)
  * @details	dentry가 가리키는 centry에서 cloc(centry 안 캐시 블록들에서의 LBA의 위치)을 바탕으로 centry 안에서의 캐시 블록 번호랑 해당 캐시 블록에서의 위치를 구해서 PPA 값을 가져오도록 한다.
  * @param	pblk	pblk 구조체
  * @param	dentry	전역 디렉터리 엔트리 구조체
- * @param	centry	centry가 가리키는 캐시 블록 집합에서의 LBA 위치
+ * @param	cloc	centry가 가리키는 캐시 블록 집합에서의 LBA 위치
  * @return	PPA 값
  * @see	pblk_get_map_nr_entries();
  */
@@ -327,16 +320,14 @@ pblk_l2p_get_ppa_from_cache(struct pblk *pblk, struct pblk_l2p_dentry *dentry,
  * @param	dentry	전역 디렉터리 엔트리 구조체
  * @return	PPA 값을 반환
  */
-static struct ppa_addr pblk_l2p_get_ppa_from_ssd(struct pblk *pblk,
-						 struct pblk_l2p_dentry *dentry)
+static void pblk_l2p_map_block_from_ssd(struct pblk *pblk,
+					struct pblk_l2p_dentry *dentry)
 {
 	struct ppa_addr ppa;
 
 	pblk_ppa_set_empty(&ppa);
 
 	/* EVICTION AND READ/WRITE OPERATION IMPLEMENTED IN THIS PLACE */
-
-	return ppa;
 }
 
 /**
@@ -349,7 +340,7 @@ static struct ppa_addr pblk_l2p_get_ppa_from_ssd(struct pblk *pblk,
  * @exception	ADDR_EMPTY	lba 값으로 계산한 offset이 0보다 작거나 centry 안에 들어갈 수 있는 ppa 갯수보다 많거나 같은 경우
  * @see	pblk_get_map_nr_entries();
  * @see	pblk_l2p_get_ppa_from_cache();
- * @see	pblk_l2p_get_ppa_from_ssd();
+ * @see	pblk_l2p_map_block_from_ssd();
  */
 struct ppa_addr pblk_l2p_get_ppa(struct pblk *pblk, sector_t lba)
 {
@@ -366,34 +357,108 @@ struct ppa_addr pblk_l2p_get_ppa(struct pblk *pblk, sector_t lba)
 	offset = do_div(idx, nr_ppa_in_centry);
 
 	if (idx >= dir->nr_dentries) {
-		printk(KERN_ERR
-		       "[%s(%s):%d] Invalid directory entry index: %ld/%ld\n",
-		       __FILE__, __func__, __LINE__, idx, dir->nr_dentries);
+		PBLK_L2P_ERR_MSG("Invalid directory entry index: %ld/%ld\n",
+				 idx, dir->nr_dentries);
 		return ppa;
 	}
 
 	if (offset >= nr_ppa_in_centry || (int)offset < 0) {
-		printk(KERN_ERR
-		       "[%s(%s):%d] Invalid directory entry offset: %lu/%lu\n",
-		       __FILE__, __func__, __LINE__, offset, nr_ppa_in_centry);
+		PBLK_L2P_ERR_MSG("Invalid directory entry offset: %lu/%lu\n",
+				 offset, nr_ppa_in_centry);
 		return ppa;
 	}
 
 	dentry = &dir->dentries[idx];
 	if (IS_PBLK_CACHE_MISS(dentry)) {
-		ppa = pblk_l2p_get_ppa_from_ssd(pblk, dentry);
-	} else {
-		ppa = pblk_l2p_get_ppa_from_cache(pblk, dentry, offset);
+		pblk_l2p_map_block_from_ssd(pblk, dentry);
 	}
 
+	ppa = pblk_l2p_get_ppa_from_cache(pblk, dentry, offset);
+
 	return ppa;
+}
+
+/**
+ * @brief	dentry가 가리키는 centry에서 캐시 블록을 통해 PPA 값을 설정하도록 한다.
+ * @details	dentry가 가리키는 centry에서 cloc(centry 안 캐시 블록들에서의 LBA의 위치)을 바탕으로 centry 안에서의 캐시 블록 번호랑 해당 캐시 블록에서의 위치를 구해서 PPA 값을 설정하도록 한다.
+ * @param	pblk	pblk 구조체
+ * @param	dentry	전역 디렉터리 엔트리 구조체
+ * @param	cloc	centry가 가리키는 캐시 블록 집합에서의 LBA 위치
+ * @param	ppa	centry의 LBA 위치에 저장되는 PPA 값
+ * @see	pblk_get_map_nr_entries();
+ */
+static void pblk_l2p_set_ppa_to_cache(struct pblk *pblk,
+				      struct pblk_l2p_dentry *dentry,
+				      sector_t cloc, struct ppa_addr ppa)
+{
+	const struct pblk_l2p_centry *centry = dentry->centry;
+
+	sector_t offset = -1, idx = cloc; /* cloc ==> cache location */
+	const sector_t nr_ppa_in_cache_blk =
+		pblk_get_map_nr_entries(pblk, PBLK_CENTRY_BLK_SIZE);
+	const unsigned char *addr;
+
+	offset = do_div(idx, nr_ppa_in_cache_blk);
+	addr = centry->cache_blk[idx] + offset * pblk_l2p_ppa_size(pblk);
+
+	if (pblk->addrf_len < 32) {
+		*((u32 *)addr) = pblk_ppa64_to_ppa32(pblk, ppa);
+	} else {
+		*((struct ppa_addr *)addr) = ppa;
+	}
+}
+
+/**
+ * @brief	전역 디렉터리를 통해 매핑 테이블의 엔트리를 설정한다.
+ * @details	동작은 `pblk_l2p_get_ppa`와 거의 유사하다. 하지만 설정을 하므로 반환 값은 LBA에 해당하는 캐시 블록에 PPA 값이 정상적으로 저장되었는가?에 관련된 정보를 반환한다.
+ * @param	pblk	pblk 구조체
+ * @param	lba	설정하고자하는 lba 위치
+ * @param	ppa	lba 위치에 설정되는 값
+ * @return	상태 값(0는 정상)
+ * @exception	-EINVAL 잘못된 lba 값이 들어온 경우에 발생하는 오류
+ * @see pblk_l2p_get_ppa
+ * @see	pblk_get_map_nr_entries();
+ */
+int pblk_l2p_set_ppa(struct pblk *pblk, sector_t lba, struct ppa_addr ppa)
+{
+	struct pblk_l2p_dir *dir = pblk->dir;
+	struct pblk_l2p_dentry *dentry = NULL;
+
+	sector_t offset = -1, idx = lba;
+	const sector_t nr_ppa_in_centry =
+		pblk_get_map_nr_entries(pblk, PBLK_CENTRY_SIZE);
+
+	offset = do_div(idx, nr_ppa_in_centry);
+
+	if (idx >= dir->nr_dentries) {
+		PBLK_L2P_ERR_MSG("Invalid directory entry index: %ld/%ld\n",
+				 idx, dir->nr_dentries);
+		return -EINVAL;
+	}
+
+	if (offset >= nr_ppa_in_centry || (int)offset < 0) {
+		PBLK_L2P_ERR_MSG("Invalid directory entry offset: %lu/%lu\n",
+				 offset, nr_ppa_in_centry);
+		return -EINVAL;
+	}
+
+	dentry = &dir->dentries[idx];
+	if (IS_PBLK_CACHE_MISS(dentry)) {
+		pblk_l2p_map_block_from_ssd(pblk, dentry);
+	}
+
+	pblk_l2p_set_ppa_to_cache(pblk, dentry, offset, ppa);
+
+	return 0;
 }
 
 /* MODULE MAIN */
 #ifdef PBLK_L2P_TEST
 static int __init init_pblk_l2p(void)
 {
+	///// 10 * 4K * 16K ==> 640MB (mapping table size) /////
 	const size_t trans_map_size = 10 * 4096 * PBLK_CENTRY_BLK_SIZE;
+	///// 4K * 16K ==> 64MB cache (cache size) /////
 	const size_t cache_size = 4096 * PBLK_CENTRY_BLK_SIZE;
 
 	pblk_test(trans_map_size, cache_size);

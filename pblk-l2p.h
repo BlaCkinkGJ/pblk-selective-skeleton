@@ -11,7 +11,7 @@
 #ifndef PBLK_L2P_H
 #define PBLK_L2P_H
 
-/* LINUX KERNEL HEADER */
+/////////////// LINUX KERNEL HEADER ///////////////
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/mempool.h>
@@ -19,23 +19,39 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 
-/* PBLK_H INCLUDED HEADER(TODO: REMOVE) */
+/////////////// PBLK_H INCLUDED HEADER(TODO: REMOVE) ///////////////
 #include <linux/lightnvm.h>
 
-/* USER DEFINE HEADER */
+/////////////// USER DEFINE HEADER ///////////////
 #include "pblk.h"
 #include "pblk-sha1.h"
 
-/* PRE-DEFINED MACRO */
+/////////////// PRE-DEFINED MACRO ///////////////
 #define PBLK_L2P_TEST /* 테스트를 하는 경우에만 사용 */
 #define PBLK_CENTRY_BLK_SIZE (PAGE_SIZE) /* 캐시 블록의 크기를 정의(byte) */
 #define PBLK_CENTRY_NR_BLK (4) /* centry에 들어가는 캐시 블록의 갯수 */
 #define PBLK_CENTRY_SIZE                                                       \
 	(PBLK_CENTRY_NR_BLK *                                                  \
 	 PBLK_CENTRY_BLK_SIZE) /* centry의 캐시 블록들의 총합 */
-#define IS_PBLK_CACHE_MISS(dentry) (dentry->centry == NULL)
 
-/* STRUCT DEFINE */
+#define IS_PBLK_CACHE_MISS(dentry) (dentry->centry == NULL)
+#define IS_PBLK_L2P_SET_HAS_ERROR(err) (err != 0)
+
+#define PBLK_L2P_UNIT_TEST_EQ(s1, s2, msg, ...)                                \
+	if (s1 != s2)                                                          \
+	trace_printk("[%s(%s):%d] " msg, __FILE__, __func__, __LINE__,         \
+		     ##__VA_ARGS__)
+#define PBLK_L2P_FTRACE_LOG(msg, ...)                                          \
+	trace_printk("[%s(%s):%d] " msg, __FILE__, __func__, __LINE__,         \
+		     ##__VA_ARGS__)
+#define PBLK_L2P_ERR_MSG(msg, ...)                                             \
+	printk(KERN_ERR "[%s(%s):%d]" msg, __FILE__, __func__, __LINE__,       \
+	       ##__VA_ARGS__)
+#define PBLK_L2P_WARN_MSG(msg, ...)                                            \
+	printk(KERN_WARNING "[%s(%s):%d]" msg, __FILE__, __func__, __LINE__,   \
+	       ##__VA_ARGS__)
+
+/////////////// STRUCT DEFINE ///////////////
 
 /**
  * @brief	캐시 매핑 테이블 엔트리 구조체
@@ -80,8 +96,9 @@ struct pblk_l2p_dir {
 	struct pblk_l2p_dentry dentries[0]; // For dynamic alloc
 };
 
-/* DECLARE FUNCION */
+/////////////// DECLARE FUNCION ///////////////
 struct ppa_addr pblk_l2p_get_ppa(struct pblk *pblk, sector_t lba);
+int pblk_l2p_set_ppa(struct pblk *pblk, sector_t lba, struct ppa_addr ppa);
 
 sector_t pblk_get_map_nr_entries(struct pblk *pblk, const size_t map_size);
 struct pblk_l2p_cache *pblk_l2p_cache_create(size_t cache_size);
@@ -93,7 +110,7 @@ int pblk_l2p_copy_map_to_centry(const unsigned char *map,
 				const size_t size);
 int pblk_l2p_trans_map_to_dir(struct pblk *pblk, const size_t trans_map_size);
 
-/* DEFINITION FUNCTION */
+/////////////// DEFINITION FUNCTION ///////////////
 
 /**
  * @brief	OCSSD 버전에 따른 ppa의 크기 값을 반환한다.
