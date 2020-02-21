@@ -16,3 +16,9 @@ tags
 
 # misc
 *.mk
+doc/
+doc.zip
+Doxyfile.bak
+
+### user defined shell file ###
+check_and_add
